@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MortiCrypt</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#075fd8">
+<meta name="application-name" content="MortiCrypt">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MortiCrypt">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <style>
+    body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
+    main{max-width:820px;margin:auto;padding:20px}
+    h1{text-align:center}
+    label{font-weight:700;display:block;margin:16px 0 8px}
+    textarea,input,select{width:100%;box-sizing:border-box;border:1px solid #b8c2d6;border-radius:8px;padding:14px;font-size:16px;background:white}
+    textarea{min-height:170px;resize:vertical}
+    .tabs,.buttons{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+    .row{display:flex;gap:10px}
+    .row input{flex:1}
+    button{border:0;border-radius:8px;padding:14px 20px;font-size:16px;cursor:pointer}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .primary{background:#075fd8;color:white}
+    .secondary{background:#dbeafe;color:#093b82}
+    .outline{background:white;border:1px solid #9ab0d0;color:#172033}
+    .active{background:#075fd8;color:white}
+    .note,#status{font-size:14px;color:#526070}
+    .meter{height:10px;border-radius:999px;background:#d8e0ec;overflow:hidden;margin-top:8px}
+    .meter div{height:100%;width:0%;transition:.2s}
+    .weak{background:#d93025}.medium{background:#f29900}.strong{background:#188038}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+<main>
+  <h1>MortiCrypt</h1>
+
+  <div class="tabs">
+    <button id="textTab" class="active" onclick="showTab('text')">Texto</button>
+    <button id="fileTab" class="outline" onclick="showTab('file')">Archivos</button>
+  </div>
+
+  <label for="password">Password</label>
+  <div class="row">
+    <input id="password" type="password" placeholder="Ejemplo: MURCIELAGO-machete-laurel-1492!">
+    <button class="outline" onclick="togglePassword()">Ver</button>
+  </div>
+
+  <div class="meter"><div id="strengthBar"></div></div>
+  <p id="strengthText" class="note">Fuerza de contraseña: pendiente.</p>
+
+  <label for="securityLevel">Nivel de seguridad</label>
+  <select id="securityLevel">
+    <option value="600000">Media - 600.000 iteraciones</option>
+    <option value="1000000">Alta - 1.000.000 iteraciones</option>
+  </select>
+
+  <section id="textPanel">
+    <label for="inputText">Texto cifrado o texto claro</label>
+    <textarea id="inputText" placeholder="Pegue aquí el texto..."></textarea>
+
+    <div class="buttons">
+      <button id="decryptTextBtn" class="primary" onclick="decryptText()">Descifrar</button>
+      <button id="encryptTextBtn" class="secondary" onclick="encryptText()">Cifrar</button>
+      <button class="outline" onclick="copyResult()">Copiar resultado</button>
+      <button class="outline" onclick="clearText()">Limpiar texto</button>
+    </div>
+
+    <label for="result">Resultado</label>
+    <textarea id="result" readonly placeholder="Aquí aparecerá el resultado..."></textarea>
+  </section>
+
+  <section id="filePanel" class="hidden">
+    <label for="fileInput">Archivo</label>
+    <input id="fileInput" type="file">
+
+    <div class="buttons">
+      <button id="encryptFileBtn" class="secondary" onclick="encryptFile()">Cifrar archivo</button>
+      <button id="decryptFileBtn" class="primary" onclick="decryptFile()">Descifrar archivo</button>
+      <button class="outline" onclick="clearFile()">Limpiar archivo</button>
+    </div>
+
+    <p class="note">
+      Al cifrar se descargará un archivo terminado en .mcrypt. Al descifrar se recuperará el nombre original.
+    </p>
+  </section>
+
+  <p id="status"></p>
+  <p class="note">MortiCrypt no guarda datos. El contenido se borra automáticamente tras 5 minutos de inactividad.</p>
+</main>
+
+<script>
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+let wipeTimer = null;
+
+const password = document.getElementById("password");
+const inputText = document.getElementById("inputText");
+const result = document.getElementById("result");
+const fileInput = document.getElementById("fileInput");
+const statusText = document.getElementById("status");
+const strengthBar = document.getElementById("strengthBar");
+const strengthText = document.getElementById("strengthText");
+
+[password,inputText,result,fileInput].forEach(el => {
+  el.addEventListener("input", () => { resetAutoWipe(); updateStrength(); });
+  el.addEventListener("change", resetAutoWipe);
+});
+
+resetAutoWipe();
+
+function showTab(tab) {
+  document.getElementById("textPanel").classList.toggle("hidden", tab !== "text");
+  document.getElementById("filePanel").classList.toggle("hidden", tab !== "file");
+  document.getElementById("textTab").className = tab === "text" ? "active" : "outline";
+  document.getElementById("fileTab").className = tab === "file" ? "active" : "outline";
+  resetAutoWipe();
+}
+
+function resetAutoWipe() {
+  clearTimeout(wipeTimer);
+  wipeTimer = setTimeout(() => {
+    clearText();
+    clearFile();
+    password.value = "";
+    updateStrength();
+    alert("MortiCrypt ha borrado los campos tras 5 minutos de inactividad.");
+  }, 5 * 60 * 1000);
+}
+
+function setBusy(isBusy) {
+  for (const id of ["encryptTextBtn","decryptTextBtn","encryptFileBtn","decryptFileBtn"]) {
+    document.getElementById(id).disabled = isBusy;
+  }
+  statusText.textContent = isBusy ? "Procesando..." : "";
+}
+
+function randomBytes(length) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return bytes;
+}
+
+function b64(bytes) {
+  const array = new Uint8Array(bytes);
+  let binary = "";
+  for (let i = 0; i < array.length; i += 0x8000) {
+    binary += String.fromCharCode(...array.subarray(i, i + 0x8000));
+  }
+  return btoa(binary).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
+}
+
+function fromB64(text) {
+  text = text.trim().replaceAll("-","+").replaceAll("_","/");
+  text += "=".repeat((4 - text.length % 4) % 4);
+  return Uint8Array.from(atob(text), c => c.charCodeAt(0));
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+function numberToBytes(num) {
+  return new Uint8Array([(num>>>24)&255,(num>>>16)&255,(num>>>8)&255,num&255]);
+}
+
+function bytesToNumber(bytes) {
+  return ((bytes[0]<<24)|(bytes[1]<<16)|(bytes[2]<<8)|bytes[3]) >>> 0;
+}
+
+function scorePassword(pass) {
+  let score = 0;
+  if (pass.length >= 12) score++;
+  if (pass.length >= 18) score++;
+  if (/[a-z]/.test(pass) && /[A-Z]/.test(pass)) score++;
+  if (/\d/.test(pass)) score++;
+  if (/[^a-zA-Z0-9]/.test(pass)) score++;
+  return score;
+}
+
+function updateStrength() {
+  const pass = password.value;
+  const score = scorePassword(pass);
+  strengthBar.className = "";
+
+  if (!pass) {
+    strengthBar.style.width = "0%";
+    strengthText.textContent = "Fuerza de contraseña: pendiente.";
+  } else if (score <= 2) {
+    strengthBar.style.width = "33%";
+    strengthBar.classList.add("weak");
+    strengthText.textContent = "Fuerza de contraseña: débil.";
+  } else if (score <= 4) {
+    strengthBar.style.width = "66%";
+    strengthBar.classList.add("medium");
+    strengthText.textContent = "Fuerza de contraseña: media.";
+  } else {
+    strengthBar.style.width = "100%";
+    strengthBar.classList.add("strong");
+    strengthText.textContent = "Fuerza de contraseña: fuerte.";
+  }
+}
+
+function validatePassword() {
+  const pass = password.value;
+  if (pass.length < 12) {
+    alert("Usa una contraseña de al menos 12 caracteres.");
+    return false;
+  }
+  if (scorePassword(pass) <= 2) {
+    alert("La contraseña es demasiado débil.");
+    return false;
+  }
+  return true;
+}
+
+async function deriveKey(pass, salt, iterations) {
+  const baseKey = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name:"PBKDF2", salt, iterations, hash:"SHA-256" },
+    baseKey,
+    { name:"AES-GCM", length:256 },
+    false,
+    ["encrypt","decrypt"]
+  );
+}
+
+function associatedData(kind, iterations) {
+  return enc.encode(`MortiCrypt-v2|${kind}|AES-256-GCM|PBKDF2-SHA256|${iterations}`);
+}
+
+function packPayload(iterations, salt, iv, cipher) {
+  return concatBytes([
+    randomBytes(8),
+    new Uint8Array([2]),
+    numberToBytes(iterations),
+    salt,
+    iv,
+    new Uint8Array(cipher)
+  ]);
+}
+
+function unpackPayload(raw) {
+  if (raw.length < 8 + 1 + 4 + 16 + 12 + 16) throw new Error("Formato incompleto");
+  const version = raw[8];
+  if (version !== 2) throw new Error("Versión no soportada");
+
+  const iterations = bytesToNumber(raw.slice(9, 13));
+  if (![600000,1000000].includes(iterations)) throw new Error("Iteraciones no permitidas");
+
+  return {
+    iterations,
+    salt: raw.slice(13, 29),
+    iv: raw.slice(29, 41),
+    cipher: raw.slice(41)
+  };
+}
+
+async function encryptText() {
+  if (!inputText.value.trim()) return alert("Introduce un texto.");
+  if (!validatePassword()) return;
+
+  setBusy(true);
+  try {
+    const iterations = Number(document.getElementById("securityLevel").value);
+    const salt = randomBytes(16);
+    const iv = randomBytes(12);
+    const key = await deriveKey(password.value, salt, iterations);
+    const cipher = await crypto.subtle.encrypt(
+      { name:"AES-GCM", iv, additionalData:associatedData("text", iterations), tagLength:128 },
+      key,
+      enc.encode(inputText.value)
+    );
+    result.value = b64(packPayload(iterations, salt, iv, cipher));
+  } catch {
+    alert("No se pudo cifrar.");
+  } finally {
+    setBusy(false);
+    resetAutoWipe();
+  }
+}
+
+async function decryptText() {
+  if (!password.value) return alert("Introduce la contraseña.");
+
+  setBusy(true);
+  try {
+    const payload = unpackPayload(fromB64(inputText.value));
+    const key = await deriveKey(password.value, payload.salt, payload.iterations);
+    const clear = await crypto.subtle.decrypt(
+      { name:"AES-GCM", iv:payload.iv, additionalData:associatedData("text", payload.iterations), tagLength:128 },
+      key,
+      payload.cipher
+    );
+    result.value = dec.decode(clear);
+  } catch {
+    alert("No se pudo descifrar. Revisa el texto o la contraseña.");
+  } finally {
+    setBusy(false);
+    resetAutoWipe();
+  }
+}
+
+function makeFilePlaintext(file, fileBytes) {
+  const meta = enc.encode(JSON.stringify({
+    name: file.name,
+    type: file.type || "application/octet-stream",
+    modified: file.lastModified || 0
+  }));
+  return concatBytes([numberToBytes(meta.length), meta, new Uint8Array(fileBytes)]);
+}
+
+function readFilePlaintext(bytes) {
+  const metaLength = bytesToNumber(bytes.slice(0, 4));
+  const meta = JSON.parse(dec.decode(bytes.slice(4, 4 + metaLength)));
+  const fileBytes = bytes.slice(4 + metaLength);
+  return { meta, fileBytes };
+}
+
+async function encryptFile() {
+  const file = fileInput.files[0];
+  if (!file) return alert("Selecciona un archivo.");
+  if (!validatePassword()) return;
+
+  setBusy(true);
+  try {
+    const iterations = Number(document.getElementById("securityLevel").value);
+    const salt = randomBytes(16);
+    const iv = randomBytes(12);
+    const key = await deriveKey(password.value, salt, iterations);
+    const plain = makeFilePlaintext(file, await file.arrayBuffer());
+
+    const cipher = await crypto.subtle.encrypt(
+      { name:"AES-GCM", iv, additionalData:associatedData("file", iterations), tagLength:128 },
+      key,
+      plain
+    );
+
+    downloadBytes(packPayload(iterations, salt, iv, cipher), file.name + ".mcrypt", "application/octet-stream");
+  } catch {
+    alert("No se pudo cifrar el archivo.");
+  } finally {
+    setBusy(false);
+    resetAutoWipe();
+  }
+}
+
+async function decryptFile() {
+  const file = fileInput.files[0];
+  if (!file) return alert("Selecciona un archivo .mcrypt.");
+  if (!password.value) return alert("Introduce la contraseña.");
+
+  setBusy(true);
+  try {
+    const payload = unpackPayload(new Uint8Array(await file.arrayBuffer()));
+    const key = await deriveKey(password.value, payload.salt, payload.iterations);
+
+    const clear = await crypto.subtle.decrypt(
+      { name:"AES-GCM", iv:payload.iv, additionalData:associatedData("file", payload.iterations), tagLength:128 },
+      key,
+      payload.cipher
+    );
+
+    const restored = readFilePlaintext(new Uint8Array(clear));
+    downloadBytes(restored.fileBytes, restored.meta.name || "archivo-descifrado", restored.meta.type);
+  } catch {
+    alert("No se pudo descifrar el archivo. Revisa el archivo o la contraseña.");
+  } finally {
+    setBusy(false);
+    resetAutoWipe();
+  }
+}
+
+function downloadBytes(bytes, name, type) {
+  const blob = new Blob([bytes], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function copyResult() {
+  if (!result.value) return alert("No hay resultado para copiar.");
+  try {
+    await navigator.clipboard.writeText(result.value);
+    alert("Resultado copiado.");
+  } catch {
+    result.select();
+    document.execCommand("copy");
+    alert("Resultado copiado.");
+  }
+  resetAutoWipe();
+}
+
+function clearText() {
+  inputText.value = "";
+  result.value = "";
+  statusText.textContent = "";
+}
+
+function clearFile() {
+  fileInput.value = "";
+  statusText.textContent = "";
+}
+
+function togglePassword() {
+  password.type = password.type === "password" ? "text" : "password";
+  resetAutoWipe();
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js");
+  });
+}
+</script>
+</body>
+</html>
