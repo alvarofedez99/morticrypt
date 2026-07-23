@@ -1,4 +1,4 @@
-const CACHE_NAME = "morticrypt-v2";
+const CACHE_NAME = "morticrypt-v3";
 
 const FILES_TO_CACHE = [
   "./",
