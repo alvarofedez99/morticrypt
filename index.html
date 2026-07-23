@@ -5,31 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MortiCrypt</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#075fd8">
+<meta name="theme-color" content="#000000">
 <meta name="application-name" content="MortiCrypt">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="MortiCrypt">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <style>
-    body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
+    body{margin:0;font-family:Arial,sans-serif;background:#ffffff;color:#000000}
     main{max-width:820px;margin:auto;padding:20px}
-    h1{text-align:center}
-    label{font-weight:700;display:block;margin:16px 0 8px}
-    textarea,input,select{width:100%;box-sizing:border-box;border:1px solid #b8c2d6;border-radius:8px;padding:14px;font-size:16px;background:white}
+    h1{text-align:center;color:#000000}
+    label{font-weight:700;display:block;margin:16px 0 8px;color:#000000}
+    textarea,input,select{width:100%;box-sizing:border-box;border:1px solid #000000;border-radius:8px;padding:14px;font-size:16px;background:#ffffff;color:#000000}
     textarea{min-height:170px;resize:vertical}
+    textarea::placeholder,input::placeholder{color:#666666}
     .tabs,.buttons{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
     .row{display:flex;gap:10px}
     .row input{flex:1}
-    button{border:0;border-radius:8px;padding:14px 20px;font-size:16px;cursor:pointer}
+    button{border:1px solid #000000;border-radius:8px;padding:14px 20px;font-size:16px;cursor:pointer;background:#ffffff;color:#000000}
     button:disabled{opacity:.55;cursor:not-allowed}
-    .primary{background:#075fd8;color:white}
-    .secondary{background:#dbeafe;color:#093b82}
-    .outline{background:white;border:1px solid #9ab0d0;color:#172033}
-    .active{background:#075fd8;color:white}
-    .note,#status{font-size:14px;color:#526070}
-    .meter{height:10px;border-radius:999px;background:#d8e0ec;overflow:hidden;margin-top:8px}
+    .primary{background:#000000;color:#ffffff;border-color:#000000}
+    .secondary{background:#ffffff;color:#000000;border-color:#000000}
+    .outline{background:#ffffff;border:1px solid #000000;color:#000000}
+    .active{background:#000000;color:#ffffff;border:1px solid #000000}
+    .note,#status{font-size:14px;color:#333333}
+    .meter{height:10px;border-radius:999px;background:#dddddd;overflow:hidden;margin-top:8px;border:1px solid #000000}
     .meter div{height:100%;width:0%;transition:.2s}
-    .weak{background:#d93025}.medium{background:#f29900}.strong{background:#188038}
+    .weak{background:#777777}
+    .medium{background:#444444}
+    .strong{background:#000000}
     .hidden{display:none}
   </style>
 </head>
